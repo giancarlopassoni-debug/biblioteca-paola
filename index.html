@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>La Biblioteca di Paola v1.22</title>
+<title>La Biblioteca di Paola v1.23</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -57,10 +57,17 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 </style>
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.22 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.23 — 21/09/2026</b></header>
 <main>
 <section class="stats">
 <div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
+
+<div class="stats" style="margin-top:8px">
+  <div class="stat"><span>EBOOK TOTALI</span><b id="nEbooks">0</b></div>
+  <div class="stat"><span>EBOOK LETTI</span><b id="nEbooksRead">0</b></div>
+  <div class="stat"><span>CARTACEI LETTI</span><b id="nPaperRead">0</b></div>
+  <div class="stat"><span>TOTALE LETTI</span><b id="nReadTotal">0</b></div>
+</div>
 </section>
 <div class="toolbar">
 <input id="search" placeholder="🔎 Titolo, autore, ISBN, PAO-0001, editore, posizione...">
@@ -414,6 +421,10 @@ function render(){
  let q=$('search').value.toLowerCase(), f=$('filter').value;
  let view=books.map((b,i)=>({b,i})).filter(x=>Object.values(x.b).join(' ').toLowerCase().includes(q) && (!f || (f==='Prestato'?x.b.loanTo||x.b.status==='Prestato':x.b.status===f)));
  $('nBooks').textContent=books.length;$('nAuthors').textContent=new Set(books.map(b=>b.author).filter(Boolean)).size;$('nGenres').textContent=new Set(books.map(b=>b.genre).filter(Boolean)).size;$('nUnread').textContent=books.filter(b=>b.status==='Da leggere').length;
+ $('nEbooks').textContent=books.filter(b=>String(b.genre||'').toUpperCase()==='EBOOK').length;
+ $('nEbooksRead').textContent=books.filter(b=>String(b.genre||'').toUpperCase()==='EBOOK' && String(b.status||'').toLowerCase()==='letto').length;
+ $('nPaperRead').textContent=books.filter(b=>String(b.genre||'').toUpperCase()!=='EBOOK' && String(b.status||'').toLowerCase()==='letto').length;
+ $('nReadTotal').textContent=books.filter(b=>String(b.status||'').toLowerCase()==='letto').length;
  $('books').innerHTML=view.length?view.map(({b,i})=>`<article class="panel book">
  <img class="cover" src="${esc(b.cover)||''}" onerror="this.style.visibility='hidden'">
  <div><div class="code">${esc(b.code)}</div><h3>${esc(b.title)}</h3><b>${esc(b.author)}</b><div class="muted">${esc(b.publisher)} ${esc(b.year)}</div>
@@ -426,7 +437,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.22',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.23',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
