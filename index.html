@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>La Biblioteca di Paola v1.25</title>
+<title>La Biblioteca di Paola v1.26</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -72,7 +72,7 @@ img,video,canvas{max-width:100%}
 
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.25 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.26 — 21/09/2026</b></header>
 <main>
 <section class="stats">
 <div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
@@ -94,6 +94,13 @@ img,video,canvas{max-width:100%}
 </main>
 
 
+<dialog id="genreSummaryDlg">
+ <div class="modal">
+  <div class="right"><button type="button" onclick="closeDialog('genreSummaryDlg')">✕ CHIUDI</button></div>
+  <h2>📚 Libri per genere</h2>
+  <div id="genreSummaryList"></div>
+ </div>
+</dialog>
 <dialog id="queryDlg">
  <div class="modal">
   <div class="right"><button type="button" onclick="closeDialog('queryDlg')">✕ CHIUDI</button></div>
@@ -101,6 +108,9 @@ img,video,canvas{max-width:100%}
   <div class="form">
    <label>Genere
     <select id="qGenre"><option value="">TUTTI I GENERI</option></select>
+   </label>
+   <label>Secondo genere da confrontare
+    <select id="qGenre2"><option value="">NESSUN CONFRONTO</option></select>
    </label>
    <label>Stato
     <select id="qStatus">
@@ -110,7 +120,7 @@ img,video,canvas{max-width:100%}
    </label>
    <label>Anno di lettura<input id="qReadYear" inputmode="numeric" placeholder="es. 2026"></label>
    <div class="full">
-    <button type="button" onclick="runStatsQuery()">CONTA</button>
+    <button type="button" onclick="runStatsQuery()">CONTA / CONFRONTA</button>
     <div id="qResult" style="margin-top:12px;font-size:20px;font-weight:700"></div>
    </div>
   </div>
@@ -450,28 +460,51 @@ function saveBook(){
 }
 function delBook(i){if(confirm('Eliminare definitivamente '+books[i].code+' — '+books[i].title+'?')){books.splice(i,1);persist()}}
 
-function openStatsQuery(){
- const sel=$('qGenre'); if(sel){
-   const current=sel.value;
-   const genres=[...new Set(books.map(b=>String(b.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'it'));
-   sel.innerHTML='<option value="">TUTTI I GENERI</option>'+genres.map(g=>'<option>'+escapeHtml(g)+'</option>').join('');
-   if(genres.includes(current))sel.value=current;
- }
- $('qResult').textContent='';
- openDialog('queryDlg');
+function genreCounts(status='',yr=''){
+ const map={};
+ books.forEach(b=>{
+   if(status && String(b.status||'')!==status)return;
+   if(yr && String(b.readYear||'').trim()!==yr)return;
+   const g=String(b.genre||'').trim()||'SENZA GENERE';
+   map[g]=(map[g]||0)+1;
+ });
+ return map;
 }
-function runStatsQuery(){
- const genre=$('qGenre').value, status=$('qStatus').value, yr=String($('qReadYear').value||'').trim();
- const found=books.filter(b=>
+function openGenreSummary(){
+ const counts=genreCounts();
+ const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'it'));
+ $('genreSummaryList').innerHTML=rows.length
+   ? rows.map(([g,n])=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 3px;border-bottom:1px solid #ddd"><b>'+escapeHtml(g)+'</b><span>'+n+'</span></div>').join('')
+   : '<p>Nessun libro registrato.</p>';
+ openDialog('genreSummaryDlg');
+}
+function openStatsQuery(){
+ const genres=[...new Set(books.map(b=>String(b.genre||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'it'));
+ const s1=$('qGenre'),s2=$('qGenre2'),old1=s1.value,old2=s2.value;
+ s1.innerHTML='<option value="">TUTTI I GENERI</option>'+genres.map(g=>'<option>'+escapeHtml(g)+'</option>').join('');
+ s2.innerHTML='<option value="">NESSUN CONFRONTO</option>'+genres.map(g=>'<option>'+escapeHtml(g)+'</option>').join('');
+ if(genres.includes(old1))s1.value=old1;if(genres.includes(old2))s2.value=old2;
+ $('qResult').textContent='';openDialog('queryDlg');
+}
+function countGenreWithFilters(genre,status,yr){
+ return books.filter(b=>
    (!genre || String(b.genre||'')===genre) &&
    (!status || String(b.status||'')===status) &&
    (!yr || String(b.readYear||'').trim()===yr)
- );
- let parts=[];
- if(genre)parts.push(genre);
- if(status)parts.push(status);
- if(yr)parts.push('anno '+yr);
- $('qResult').textContent=(parts.length?parts.join(' • '):'Tutti i libri')+': '+found.length;
+ ).length;
+}
+function runStatsQuery(){
+ const g1=$('qGenre').value,g2=$('qGenre2').value,status=$('qStatus').value,yr=String($('qReadYear').value||'').trim();
+ if(g2 && !g1){$('qResult').textContent='Scegli anche il primo genere da confrontare.';return}
+ const suffix=[status,yr?('anno '+yr):''].filter(Boolean).join(' • ');
+ if(g2){
+   const n1=countGenreWithFilters(g1,status,yr),n2=countGenreWithFilters(g2,status,yr);
+   $('qResult').innerHTML='<div>'+escapeHtml(g1)+': '+n1+'</div><div>'+escapeHtml(g2)+': '+n2+'</div>'+(suffix?'<small>'+escapeHtml(suffix)+'</small>':'');
+ }else{
+   const n=countGenreWithFilters(g1,status,yr);
+   const label=[g1||'Tutti i libri',suffix].filter(Boolean).join(' • ');
+   $('qResult').textContent=label+': '+n;
+ }
 }
 function render(){
  let q=$('search').value.toLowerCase(), f=$('filter').value;
@@ -489,7 +522,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.25',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.26',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
