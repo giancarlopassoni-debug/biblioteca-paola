@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>La Biblioteca di Paola v1.16</title>
+<title>La Biblioteca di Paola v1.17</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -56,7 +56,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 </style>
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.16 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.17 — 21/09/2026</b></header>
 <main>
 <section class="stats">
 <div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
@@ -155,14 +155,14 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 <label class="full">Data prestito<input id="loanDate" type="date"></label>
 <label class="full">Note<textarea id="notes" rows="3"></textarea></label>
 </div>
-<div class="right"><button class="light" onclick="dlg.close()">ANNULLA</button><button onclick="saveBook()">SALVA LIBRO</button></div>
+<div class="right"><button class="light" onclick="closeDialog('dlg')">ANNULLA</button><button onclick="saveBook()">SALVA LIBRO</button></div>
 </div></dialog>
 
 <dialog id="resultsDlg"><div class="modal">
 <h2>Edizioni trovate</h2>
 <p class="muted">Seleziona la versione che corrisponde al libro di Paola. I dati verranno copiati automaticamente nella scheda.</p>
 <div id="resultsList" style="display:grid;gap:10px;max-height:60vh;overflow:auto"></div>
-<div class="right"><button class="light" onclick="$('resultsDlg').close()">CHIUDI</button></div>
+<div class="right"><button class="light" onclick="closeDialog('resultsDlg')">CHIUDI</button></div>
 </div></dialog>
 
 <dialog id="scanDlg"><div class="modal"><h2>Scansione ISBN</h2>
@@ -171,12 +171,15 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 <div class="right"><button class="light" onclick="stopScan()">CHIUDI</button></div></div></dialog>
 
 <script>
+window.addEventListener('error',function(e){console.error(e.error||e.message)});
 const KEY='paola_library_v1'; let books=JSON.parse(localStorage.getItem(KEY)||'[]'), editing=null, stream=null;
 const $=id=>document.getElementById(id); const fields=['isbn','code','title','author','publisher','year','genre','language','pages','room','shelf','position','status','rating','readYear','cover','loanTo','loanDate','notes'];
 function persist(){localStorage.setItem(KEY,JSON.stringify(books));render()}
+function openDialog(id){const el=$(id);if(!el)return;try{if(typeof el.showModal==='function')el.showModal();else el.setAttribute('open','')}catch(e){el.setAttribute('open','')}}
+function closeDialog(id){const el=$(id);if(!el)return;try{if(typeof el.close==='function')el.close();else el.removeAttribute('open')}catch(e){el.removeAttribute('open')}}
 function nextCode(){let n=Math.max(0,...books.map(b=>+(b.code||'').replace(/\D/g,'')||0))+1;return 'PAO-'+String(n).padStart(4,'0')}
-function newBook(){editing=null;fields.forEach(x=>$(x).value='');$('code').value=nextCode();$('status').value='Da leggere';$('dlgTitle').textContent='Aggiungi un libro';dlg.showModal()}
-function editBook(i){editing=i;let b=books[i];fields.forEach(x=>$(x).value=b[x]||'');$('dlgTitle').textContent='Modifica '+b.code;dlg.showModal()}
+function newBook(){editing=null;fields.forEach(x=>$(x).value='');$('code').value=nextCode();$('status').value='Da leggere';$('dlgTitle').textContent='Aggiungi un libro';openDialog('dlg')}
+function editBook(i){editing=i;let b=books[i];fields.forEach(x=>$(x).value=b[x]||'');$('dlgTitle').textContent='Modifica '+b.code;openDialog('dlg')}
 async function lookupISBN(){
  let isbn=$('isbn').value.replace(/[^0-9X]/gi,''); if(!isbn)return alert('Inserisci un ISBN.');
  try{
@@ -201,7 +204,7 @@ function volumeToBook(v){
 function applyVolume(v){
  let b=volumeToBook(v);
  ['isbn','title','author','publisher','year','genre','language','cover'].forEach(k=>$(k).value=b[k]||'');
- $('resultsDlg').close();
+ closeDialog('resultsDlg');
 }
 
 function inferGenre(subjects){
@@ -226,7 +229,7 @@ async function lookupAuthor(){
  let author=$('author').value.trim();
  if(!author)return alert('Scrivi il nome dell’autore.');
  $('resultsList').innerHTML='<div class="panel">🔎 Ricerca dei libri di '+esc(author)+'...</div>';
- $('resultsDlg').showModal();
+ openDialog('resultsDlg');
  try{
   let r=await fetch('https://openlibrary.org/search.json?author='+encodeURIComponent(author)+'&fields=key,title,author_name,isbn,publisher,publish_year,language,cover_i,subject&limit=40');
   let d=await r.json(), docs=d.docs||[];
@@ -250,7 +253,7 @@ async function lookupTitle(){
  let title=$('title').value.trim(), author=$('author').value.trim();
  if(!title)return alert('Scrivi almeno il titolo del libro.');
  $('resultsList').innerHTML='<div class="panel">🔎 Ricerca nelle biblioteche online...</div>';
- $('resultsDlg').showModal();
+ openDialog('resultsDlg');
  let results=[];
  try{
    // MOTORE 1: Open Library. Restituisce dati bibliografici ed edition_key.
@@ -325,7 +328,7 @@ async function lookupTitle(){
 function selectEdition(i){
  let b=window._editionResults?.[i]; if(!b)return;
  ['isbn','title','author','publisher','year','genre','language','pages','cover'].forEach(k=>{if($(k))$(k).value=b[k]||''});
- $('resultsDlg').close();
+ closeDialog('resultsDlg');
 }
 function selectSearchResult(i){
  let item=window._searchItems?.[i]; if(item)applyVolume(item.volumeInfo||{});
@@ -335,7 +338,7 @@ function saveBook(){
  if(!b.title)return alert('Inserisci almeno il titolo.');
  let duplicate=books.findIndex((x,i)=>i!==editing && b.isbn && x.isbn.replace(/\D/g,'')===b.isbn.replace(/\D/g,''));
  if(duplicate>=0 && !confirm('ATTENZIONE: questo ISBN è già presente come '+books[duplicate].code+'. Vuoi aggiungerlo comunque?'))return;
- if(editing===null)books.push(b);else books[editing]=b;persist();dlg.close()
+ if(editing===null)books.push(b);else books[editing]=b;persist();closeDialog('dlg')
 }
 function delBook(i){if(confirm('Eliminare definitivamente '+books[i].code+' — '+books[i].title+'?')){books.splice(i,1);persist()}}
 function render(){
@@ -354,7 +357,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.16',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.17',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
@@ -382,7 +385,7 @@ async function scanISBN(){
  }
  try{
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
-  $('video').srcObject=stream;$('scanDlg').showModal();
+  $('video').srcObject=stream;openDialog('scanDlg');
   let detector=new BarcodeDetector({formats:['ean_13','ean_8']});
   let loop=async()=>{if(!stream)return;try{let codes=await detector.detect($('video'));if(codes.length){let x=codes[0].rawValue;if(/^97[89]\d{10}$/.test(x)){stopScan();newBook();$('isbn').value=x;lookupISBN();return}}}catch(e){}requestAnimationFrame(loop)};loop()
  }catch(e){$('isbnPhoto').value='';$('isbnPhoto').click()}
@@ -407,7 +410,7 @@ async function readISBNPhoto(input){
    newBook();$('isbn').value=isbn;lookupISBN();
  }
 }
-function stopScan(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}if($('scanDlg').open)$('scanDlg').close()}
+function stopScan(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}if($('scanDlg').open)closeDialog('scanDlg')}
 render();
 </script><script>
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
