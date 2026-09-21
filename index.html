@@ -7,9 +7,9 @@
 <meta name="apple-mobile-web-app-title" content="Biblioteca Paola">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
-<script src="https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>La Biblioteca di Paola v1.18</title>
+<title>La Biblioteca di Paola v1.19</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -57,7 +57,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 </style>
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.18 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.19 — 21/09/2026</b></header>
 <main>
 <section class="stats">
 <div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
@@ -70,7 +70,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 </div>
 <div class="toolbar" style="grid-template-columns:auto auto auto 1fr">
 <button class="light" onclick="document.getElementById('restore').click()">RIPRISTINA</button><button class="light" onclick="exportCSV()">ESPORTA CSV</button>
-<select id="filter" onchange="render()"><option value="">Tutti i libri</option><option>Da leggere</option><option>Letto</option><option>In lettura</option><option>Prestato</option></select><span></span>
+<select id="filter" onchange="render()"><option value="">Tutti i libri</option><option>Da leggere</option><option>Letto</option><option>In lettura</option><option>Prestato</option><option>Ebook</option></select><span></span>
 <input type="file" id="restore" accept=".json" hidden onchange="restoreBackup(this.files[0])">
 <div style="grid-column:1/-1;font-size:12px;color:#746b62">Su iPhone: <b>BACKUP DIRETTO</b> → Salva su File → iCloud Drive. Il backup usa sempre il nome <b>Biblioteca_Paola_BACKUP.json</b>.</div>
 </div>
@@ -81,7 +81,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 <h2 id="dlgTitle">Aggiungi libro</h2>
 <div class="notice">Puoi cercare in due modi: <b>ISBN → CERCA ONLINE</b>, oppure, se non hai il codice, scrivi il <b>TITOLO → CERCA TITOLO</b>. Nel secondo caso vedrai le edizioni trovate e potrai scegliere quella corretta.</div>
 <div class="form">
-<label>ISBN <div style="display:flex;gap:6px"><input id="isbn"><button type="button" onclick="lookupISBN()">CERCA ONLINE</button></div></label>
+<label>ISBN <div style="display:flex;gap:6px"><input id="isbn" inputmode="numeric" autocomplete="off" placeholder="978..." onkeydown="if(event.key===\'Enter\'){event.preventDefault();lookupISBN()}"><button type="button" onclick="lookupISBN()">CERCA ONLINE</button></div></label>
 <label>Codice archivio<input id="code" readonly></label>
 <label>Titolo <div style="display:flex;gap:6px"><input id="title" placeholder="es. Il nome della rosa"><button type="button" onclick="lookupTitle()">CERCA TITOLO</button></div></label><label>Autore <div style="display:flex;gap:6px"><input id="author" placeholder="es. Umberto Eco"><button type="button" onclick="lookupAuthor()">CERCA AUTORE</button></div></label>
 <label>Editore<input id="publisher"></label><label>Anno<input id="year"></label>
@@ -150,7 +150,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 <option>ANTIBAGNO</option>
 </select>
 </label><label>Scaffale<input id="shelf" placeholder="es. 4"></label>
-<label>Posizione<input id="position" placeholder="es. 12"></label><label>Stato<select id="status"><option>Da leggere</option><option>Letto</option><option>In lettura</option><option>Prestato</option></select></label>
+<label>Posizione<input id="position" placeholder="es. 12"></label><label>Stato<select id="status"><option>Da leggere</option><option>Letto</option><option>In lettura</option><option>Prestato</option><option>Ebook</option></select></label>
 <label>Valutazione<select id="rating"><option value="">—</option><option>★</option><option>★★</option><option>★★★</option><option>★★★★</option><option>★★★★★</option></select></label><label>Anno lettura<input id="readYear"></label>
 <label class="full">URL copertina<input id="cover"></label>
 <label class="full">Prestato a<input id="loanTo" placeholder="Nome della persona"></label>
@@ -183,15 +183,43 @@ function nextCode(){let n=Math.max(0,...books.map(b=>+(b.code||'').replace(/\D/g
 function newBook(){editing=null;fields.forEach(x=>$(x).value='');$('code').value=nextCode();$('status').value='Da leggere';$('dlgTitle').textContent='Aggiungi un libro';openDialog('dlg')}
 function editBook(i){editing=i;let b=books[i];fields.forEach(x=>$(x).value=b[x]||'');$('dlgTitle').textContent='Modifica '+b.code;openDialog('dlg')}
 async function lookupISBN(){
- let isbn=$('isbn').value.replace(/[^0-9X]/gi,''); if(!isbn)return alert('Inserisci un ISBN.');
+ let isbn=String($('isbn').value||'').toUpperCase().replace(/[^0-9X]/g,'');
+ if(!(isbn.length===10||isbn.length===13))return alert('ISBN non valido. Inserisci le 10 o 13 cifre stampate sotto il codice a barre.');
+ $('isbn').value=isbn;
  try{
-  let r=await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:'+encodeURIComponent(isbn));
-  let d=await r.json(); if(!d.items?.length)return alert('Libro non trovato. Puoi compilare la scheda manualmente.');
-  let v=d.items[0].volumeInfo||{}, ids=v.industryIdentifiers||[];
-  $('title').value=v.title||'';$('author').value=(v.authors||[]).join(', ');$('publisher').value=v.publisher||'';$('year').value=(v.publishedDate||'').slice(0,4);
-  $('genre').value=(v.categories||[]).join(', ');$('language').value=(v.language||'').toUpperCase();
-  $('cover').value=(v.imageLinks?.thumbnail||v.imageLinks?.smallThumbnail||'').replace('http:','https:');
- }catch(e){alert('Ricerca online non disponibile. Controlla la connessione Internet.')}
+   // Open Library: prima fonte
+   let r=await fetch('https://openlibrary.org/api/books?bibkeys=ISBN:'+encodeURIComponent(isbn)+'&jscmd=data&format=json');
+   if(r.ok){
+     let d=await r.json(), v=d['ISBN:'+isbn];
+     if(v){
+       $('title').value=v.title||'';
+       $('author').value=(v.authors||[]).map(a=>a.name).join(', ');
+       $('publisher').value=(v.publishers||[]).map(a=>a.name).join(', ');
+       $('year').value=String(v.publish_date||'').match(/\d{4}/)?.[0]||'';
+       $('pages').value=v.number_of_pages||'';
+       $('cover').value=v.cover?.medium||v.cover?.large||v.cover?.small||'';
+       return;
+     }
+   }
+ }catch(e){}
+ try{
+   // Google Books fallback
+   let r=await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:'+encodeURIComponent(isbn)+'&maxResults=10');
+   let d=await r.json();
+   if(d.items?.length){
+     let v=d.items[0].volumeInfo||{};
+     $('title').value=v.title||'';
+     $('author').value=(v.authors||[]).join(', ');
+     $('publisher').value=v.publisher||'';
+     $('year').value=(v.publishedDate||'').slice(0,4);
+     $('genre').value=inferGenre(v.categories||[]);
+     $('language').value=(v.language||'').toLowerCase()==='it'?'ITA':((v.language||'').toLowerCase()==='en'?'ENG':'ALTRO');
+     $('pages').value=v.pageCount||'';
+     $('cover').value=(v.imageLinks?.thumbnail||v.imageLinks?.smallThumbnail||'').replace('http:','https:');
+     return;
+   }
+ }catch(e){}
+ alert('ISBN non trovato nei cataloghi online. Controlla il numero oppure compila la scheda manualmente.');
 }
 
 function volumeToBook(v){
@@ -359,7 +387,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.18',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.19',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
@@ -394,21 +422,18 @@ async function scanISBN(){
 }
 async function readISBNPhoto(input){
  const file=input.files&&input.files[0]; if(!file)return;
- const img=$('isbnDecodeImage');
- const url=URL.createObjectURL(file);
+ const img=$('isbnDecodeImage'), url=URL.createObjectURL(file);
  try{
    img.src=url;
    await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject});
    let raw='';
-   // Prima scelta: ZXing, vero lettore EAN/ISBN compatibile con immagini.
-   if(window.ZXingBrowser && ZXingBrowser.BrowserMultiFormatReader){
+   if(window.ZXing && ZXing.BrowserBarcodeReader){
      try{
-       const reader=new ZXingBrowser.BrowserMultiFormatReader();
-       const result=await reader.decodeFromImageElement(img);
-       raw=result && (result.getText ? result.getText() : result.text) || '';
+       const reader=new ZXing.BrowserBarcodeReader();
+       const result=await reader.decodeFromImage(img);
+       raw=result?.text||(result?.getText?result.getText():'');
      }catch(e){}
    }
-   // Fallback: API nativa, se disponibile.
    if(!raw && 'BarcodeDetector' in window){
      try{
        const detector=new BarcodeDetector({formats:['ean_13','ean_8']});
@@ -418,17 +443,13 @@ async function readISBNPhoto(input){
    }
    const isbn=String(raw).replace(/\D/g,'');
    if(/^97[89]\d{10}$/.test(isbn)){
-     newBook();
-     $('isbn').value=isbn;
-     await lookupISBN();
-     return;
+     newBook(); $('isbn').value=isbn; await lookupISBN(); return;
    }
-   alert('Non sono riuscito a leggere il codice ISBN dalla foto. Riprova avvicinandoti al codice, con buona luce e tenendo il barcode diritto.');
+   alert('Codice non letto. Riprova fotografando solo il barcode ISBN, diritto, ben illuminato e abbastanza vicino. In alternativa premi AGGIUNGI e digita le 10/13 cifre nel campo ISBN.');
  }catch(e){
    alert('Non sono riuscito ad aprire la foto. Riprova.');
  }finally{
-   URL.revokeObjectURL(url);
-   input.value='';
+   URL.revokeObjectURL(url); input.value='';
  }
 }
 function stopScan(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}if($('scanDlg').open)closeDialog('scanDlg')}
