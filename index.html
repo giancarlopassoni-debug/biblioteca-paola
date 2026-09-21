@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta name="theme-color" content="#8b6f47">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Biblioteca Paola">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>La Biblioteca di Paola v1.00</title>
+<style>
+:root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
+header{background:#332a22;color:white;padding:18px 4vw;display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap}
+header h1{margin:0;font-family:Georgia,serif;font-size:clamp(24px,4vw,38px)} header small{opacity:.8}
+main{max-width:1250px;margin:auto;padding:22px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.stat,.panel{background:var(--paper);border:1px solid #ddd1bf;border-radius:16px;padding:16px;box-shadow:0 5px 16px #0000000b}
+.stat b{font-size:28px;display:block;color:var(--accent)} .toolbar{display:grid;grid-template-columns:1fr auto auto auto;gap:9px;margin:16px 0}
+input,select,textarea,button{font:inherit;border-radius:10px;border:1px solid #cfc1ae;padding:11px;background:white;color:var(--ink)}
+button{cursor:pointer;background:var(--accent);color:white;border:0;font-weight:700}button.alt{background:#6b7468}button.light{background:#ded2c1;color:#332a22}.danger{background:var(--red)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:14px}.book{display:grid;grid-template-columns:78px 1fr;gap:12px}.cover{width:78px;height:112px;object-fit:cover;background:#ddd;border-radius:7px}.book h3{margin:0 0 5px;font-family:Georgia,serif}.code{font-weight:800;color:var(--accent)}.muted{color:#746b62;font-size:13px}.badge{display:inline-block;background:var(--soft);padding:4px 7px;border-radius:999px;font-size:12px;margin:3px 3px 0 0}.actions{grid-column:1/-1;display:flex;gap:7px;flex-wrap:wrap}.actions button{padding:7px 9px;font-size:12px}
+dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 20px 60px #0005}dialog::backdrop{background:#0007}.modal{padding:22px;background:var(--paper)}.modal h2{margin-top:0;font-family:Georgia,serif}.form{display:grid;grid-template-columns:1fr 1fr;gap:11px}.form .full{grid-column:1/-1}.form label{font-size:12px;font-weight:800;min-height:0}.form label>*{display:block;width:100%;margin-top:4px}.form datalist{display:none!important;width:0!important;height:0!important;margin:0!important;padding:0!important;position:absolute!important}.preview{display:flex;gap:14px;align-items:flex-start}.preview img{width:100px;min-height:140px;object-fit:cover;background:#ddd}.right{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
+#reader{display:none}.empty{text-align:center;padding:55px 20px;color:#776d62}.notice{background:#fff4cc;border:1px solid #ead37c;padding:10px;border-radius:10px;margin:10px 0}
+@media(max-width:720px){.stats{grid-template-columns:1fr 1fr}.toolbar{grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}.form{grid-template-columns:1fr}.form .full{grid-column:auto}}
+</style>
+</head>
+<body>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.13 — 21/09/2026</b></header>
+<main>
+<section class="stats">
+<div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
+</section>
+<div class="toolbar">
+<input id="search" placeholder="🔎 Titolo, autore, ISBN, PAO-0001, editore, posizione...">
+<button onclick="newBook()">＋ AGGIUNGI</button><button class="alt" onclick="scanISBN()">▣ SCANSIONA ISBN</button><button class="light" onclick="directBackup()">☁ BACKUP DIRETTO</button>
+</div>
+<div class="toolbar" style="grid-template-columns:auto auto auto 1fr">
+<button class="light" onclick="document.getElementById('restore').click()">RIPRISTINA</button><button class="light" onclick="exportCSV()">ESPORTA CSV</button>
+<select id="filter" onchange="render()"><option value="">Tutti i libri</option><option>Da leggere</option><option>Letto</option><option>In lettura</option><option>Prestato</option></select><span></span>
+<input type="file" id="restore" accept=".json" hidden onchange="restoreBackup(this.files[0])">
+<div style="grid-column:1/-1;font-size:12px;color:#746b62">Su iPhone: <b>BACKUP DIRETTO</b> → Salva su File → iCloud Drive. Il backup usa sempre il nome <b>Biblioteca_Paola_BACKUP.json</b>.</div>
+</div>
+<section id="books" class="grid"></section>
+</main>
+
+<dialog id="dlg"><div class="modal">
+<h2 id="dlgTitle">Aggiungi libro</h2>
+<div class="notice">Puoi cercare in due modi: <b>ISBN → CERCA ONLINE</b>, oppure, se non hai il codice, scrivi il <b>TITOLO → CERCA TITOLO</b>. Nel secondo caso vedrai le edizioni trovate e potrai scegliere quella corretta.</div>
+<div class="form">
+<label>ISBN <div style="display:flex;gap:6px"><input id="isbn"><button type="button" onclick="lookupISBN()">CERCA ONLINE</button></div></label>
+<label>Codice archivio<input id="code" readonly></label>
+<label>Titolo <div style="display:flex;gap:6px"><input id="title" placeholder="es. Il nome della rosa"><button type="button" onclick="lookupTitle()">CERCA TITOLO</button></div></label><label>Autore <div style="display:flex;gap:6px"><input id="author" placeholder="es. Umberto Eco"><button type="button" onclick="lookupAuthor()">CERCA AUTORE</button></div></label>
+<label>Editore<input id="publisher"></label><label>Anno<input id="year"></label>
+<label>Genere
+<select id="genre">
+<option value="">AUTOMATICO (dal catalogo)</option>
+<option>NARRATIVA ITALIANA</option>
+<option>NARRATIVA STRANIERA</option>
+<option>ROMANZO STORICO</option>
+<option>GIALLO / THRILLER</option>
+<option>NOIR</option>
+<option>FANTASCIENZA</option>
+<option>FANTASY</option>
+<option>HORROR</option>
+<option>AVVENTURA</option>
+<option>ROMANCE</option>
+<option>CLASSICI</option>
+<option>POESIA</option>
+<option>TEATRO</option>
+<option>BIOGRAFIA / AUTOBIOGRAFIA</option>
+<option>STORIA</option>
+<option>FILOSOFIA</option>
+<option>PSICOLOGIA</option>
+<option>SOCIOLOGIA</option>
+<option>POLITICA</option>
+<option>RELIGIONE</option>
+<option>ARTE</option>
+<option>MUSICA</option>
+<option>CINEMA</option>
+<option>SCIENZA</option>
+<option>TECNOLOGIA</option>
+<option>INFORMATICA</option>
+<option>MEDICINA</option>
+<option>NATURA / AMBIENTE</option>
+<option>VIAGGI</option>
+<option>GEOGRAFIA</option>
+<option>CUCINA</option>
+<option>HOBBY / TEMPO LIBERO</option>
+<option>SPORT</option>
+<option>MANUALISTICA</option>
+<option>ECONOMIA / FINANZA</option>
+<option>DIRITTO</option>
+<option>BAMBINI / RAGAZZI</option>
+<option>FUMETTI / GRAPHIC NOVEL</option>
+<option>SAGGI</option>
+<option>DIZIONARI / ENCICLOPEDIE</option>
+<option>ALTRO</option>
+</select>
+</label><label>Lingua
+<select id="language">
+<option value="">— Seleziona —</option>
+<option value="ITA">ITA</option>
+<option value="ENG">ENG</option>
+<option value="ALTRO">ALTRO</option>
+</select>
+</label><label>Numero pagine<input id="pages"></label>
+<label>Libreria / stanza
+<select id="room">
+<option value="">— Seleziona —</option>
+<option>CUCINA</option>
+<option>SALA</option>
+<option>CORRIDOIO</option>
+<option>CAMERA DA LETTO</option>
+<option>LAVANDERIA</option>
+<option>CAMERETTA</option>
+<option>ANTIBAGNO</option>
+</select>
+</label><label>Scaffale<input id="shelf" placeholder="es. 4"></label>
+<label>Posizione<input id="position" placeholder="es. 12"></label><label>Stato<select id="status"><option>Da leggere</option><option>Letto</option><option>In lettura</option><option>Prestato</option></select></label>
+<label>Valutazione<select id="rating"><option value="">—</option><option>★</option><option>★★</option><option>★★★</option><option>★★★★</option><option>★★★★★</option></select></label><label>Anno lettura<input id="readYear"></label>
+<label class="full">URL copertina<input id="cover"></label>
+<label class="full">Prestato a<input id="loanTo" placeholder="Nome della persona"></label>
+<label class="full">Data prestito<input id="loanDate" type="date"></label>
+<label class="full">Note<textarea id="notes" rows="3"></textarea></label>
+</div>
+<div class="right"><button class="light" onclick="dlg.close()">ANNULLA</button><button onclick="saveBook()">SALVA LIBRO</button></div>
+</div></dialog>
+
+<dialog id="resultsDlg"><div class="modal">
+<h2>Edizioni trovate</h2>
+<p class="muted">Seleziona la versione che corrisponde al libro di Paola. I dati verranno copiati automaticamente nella scheda.</p>
+<div id="resultsList" style="display:grid;gap:10px;max-height:60vh;overflow:auto"></div>
+<div class="right"><button class="light" onclick="$('resultsDlg').close()">CHIUDI</button></div>
+</div></dialog>
+
+<dialog id="scanDlg"><div class="modal"><h2>Scansione ISBN</h2>
+<p>Inquadra il codice a barre ISBN. La scansione tramite fotocamera funziona sui browser che supportano BarcodeDetector; altrimenti puoi digitare il codice.</p>
+<video id="video" style="width:100%;border-radius:12px;background:#111" autoplay playsinline></video>
+<div class="right"><button class="light" onclick="stopScan()">CHIUDI</button></div></div></dialog>
+
+<script>
+const KEY='paola_library_v1'; let books=JSON.parse(localStorage.getItem(KEY)||'[]'), editing=null, stream=null;
+const $=id=>document.getElementById(id); const fields=['isbn','code','title','author','publisher','year','genre','language','pages','room','shelf','position','status','rating','readYear','cover','loanTo','loanDate','notes'];
+function persist(){localStorage.setItem(KEY,JSON.stringify(books));render()}
+function nextCode(){let n=Math.max(0,...books.map(b=>+(b.code||'').replace(/\D/g,'')||0))+1;return 'PAO-'+String(n).padStart(4,'0')}
+function newBook(){editing=null;fields.forEach(x=>$(x).value='');$('code').value=nextCode();$('status').value='Da leggere';$('dlgTitle').textContent='Aggiungi un libro';dlg.showModal()}
+function editBook(i){editing=i;let b=books[i];fields.forEach(x=>$(x).value=b[x]||'');$('dlgTitle').textContent='Modifica '+b.code;dlg.showModal()}
+async function lookupISBN(){
+ let isbn=$('isbn').value.replace(/[^0-9X]/gi,''); if(!isbn)return alert('Inserisci un ISBN.');
+ try{
+  let r=await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:'+encodeURIComponent(isbn));
+  let d=await r.json(); if(!d.items?.length)return alert('Libro non trovato. Puoi compilare la scheda manualmente.');
+  let v=d.items[0].volumeInfo||{}, ids=v.industryIdentifiers||[];
+  $('title').value=v.title||'';$('author').value=(v.authors||[]).join(', ');$('publisher').value=v.publisher||'';$('year').value=(v.publishedDate||'').slice(0,4);
+  $('genre').value=(v.categories||[]).join(', ');$('language').value=(v.language||'').toUpperCase();
+  $('cover').value=(v.imageLinks?.thumbnail||v.imageLinks?.smallThumbnail||'').replace('http:','https:');
+ }catch(e){alert('Ricerca online non disponibile. Controlla la connessione Internet.')}
+}
+
+function volumeToBook(v){
+ let ids=v.industryIdentifiers||[], isbn13=(ids.find(x=>x.type==='ISBN_13')||{}).identifier||'', isbn10=(ids.find(x=>x.type==='ISBN_10')||{}).identifier||'';
+ return {
+  isbn:isbn13||isbn10||'', title:v.title||'', author:(v.authors||[]).join(', '),
+  publisher:v.publisher||'', year:(v.publishedDate||'').slice(0,4),
+  genre:inferGenre(v.categories||[]), language:(v.language||'').toLowerCase()==='it'?'ITA':((v.language||'').toLowerCase()==='en'?'ENG':'ALTRO'),
+  cover:(v.imageLinks?.thumbnail||v.imageLinks?.smallThumbnail||'').replace('http:','https:'), pages:v.pageCount||''
+ };
+}
+function applyVolume(v){
+ let b=volumeToBook(v);
+ ['isbn','title','author','publisher','year','genre','language','cover'].forEach(k=>$(k).value=b[k]||'');
+ $('resultsDlg').close();
+}
+
+function inferGenre(subjects){
+ let x=(subjects||[]).join(' ').toLowerCase();
+ const rules=[
+  ['GIALLO / THRILLER',/mystery|detective|thriller|crime|giallo|poliziesc/],
+  ['FANTASCIENZA',/science fiction|fantascienza/],['FANTASY',/fantasy/],['HORROR',/horror/],
+  ['ROMANZO STORICO',/historical fiction|romanzo storico/],['ROMANCE',/romance|love stories|romanzo rosa/],
+  ['BIOGRAFIA / AUTOBIOGRAFIA',/biograph|autobiograph|memoir/],['STORIA',/history|storia/],
+  ['FILOSOFIA',/philosoph|filosof/],['PSICOLOGIA',/psycholog|psicolog/],['RELIGIONE',/religio|religion/],
+  ['ARTE',/art\b|arte/],['MUSICA',/music|musica/],['CINEMA',/cinema|film/],
+  ['SCIENZA',/science|scienz/],['TECNOLOGIA',/technology|tecnolog/],['INFORMATICA',/computer|informatica|programming/],
+  ['MEDICINA',/medicine|medical|medicin/],['VIAGGI',/travel|viagg/],['CUCINA',/cooking|cookbook|cucina|ricette/],
+  ['SPORT',/sport/],['ECONOMIA / FINANZA',/econom|finance|finanza/],['DIRITTO',/law|diritto/],
+  ['BAMBINI / RAGAZZI',/juvenile|children|ragazzi|bambini/],['FUMETTI / GRAPHIC NOVEL',/comic|graphic novel|fumett/],
+  ['POESIA',/poetry|poesia/],['TEATRO',/drama|theater|theatre|teatro/],['SAGGI',/essays|saggi/]
+ ];
+ for(let [g,r] of rules)if(r.test(x))return g;
+ return '';
+}
+async function lookupAuthor(){
+ let author=$('author').value.trim();
+ if(!author)return alert('Scrivi il nome dell’autore.');
+ $('resultsList').innerHTML='<div class="panel">🔎 Ricerca dei libri di '+esc(author)+'...</div>';
+ $('resultsDlg').showModal();
+ try{
+  let r=await fetch('https://openlibrary.org/search.json?author='+encodeURIComponent(author)+'&fields=key,title,author_name,isbn,publisher,publish_year,language,cover_i,subject&limit=40');
+  let d=await r.json(), docs=d.docs||[];
+  window._editionResults=docs.map(doc=>({
+   source:'Open Library',title:doc.title||'',author:(doc.author_name||[]).join(', '),
+   publisher:(doc.publisher||[])[0]||'',year:(doc.publish_year||[]).sort((a,b)=>b-a)[0]||'',
+   isbn:(doc.isbn||[]).find(x=>String(x).length===13)||(doc.isbn||[])[0]||'',
+   language:(doc.language||[]).includes('ita')?'ITA':((doc.language||[]).includes('eng')?'ENG':'ALTRO'),
+   pages:'',genre:inferGenre(doc.subject||[]),cover:doc.cover_i?'https://covers.openlibrary.org/b/id/'+doc.cover_i+'-M.jpg':'',
+   italian:(doc.language||[]).includes('ita')
+  })).sort((a,b)=>(b.italian-a.italian)||(b.year-a.year));
+  if(!window._editionResults.length){$('resultsList').innerHTML='<div class="panel">Nessun libro trovato per questo autore.</div>';return}
+  $('resultsList').innerHTML=window._editionResults.map((b,i)=>`<div class="panel" style="display:grid;grid-template-columns:60px 1fr auto;gap:10px;align-items:center">
+   <img src="${esc(b.cover)}" onerror="this.style.visibility='hidden'" style="width:55px;height:78px;object-fit:cover;background:#ddd;border-radius:5px">
+   <div><b style="font-family:Georgia,serif">${esc(b.title)}</b><div>${esc(b.author)}</div>
+   <div class="muted">${esc(b.publisher)} ${esc(b.year)}${b.isbn?' · ISBN '+esc(b.isbn):''}</div>
+   ${b.genre?`<span class="badge">${esc(b.genre)}</span>`:''}</div><button onclick="selectEdition(${i})">SELEZIONA</button></div>`).join('');
+ }catch(e){$('resultsList').innerHTML='<div class="panel">Ricerca autore non disponibile. Controlla la connessione Internet.</div>'}
+}
+async function lookupTitle(){
+ let title=$('title').value.trim(), author=$('author').value.trim();
+ if(!title)return alert('Scrivi almeno il titolo del libro.');
+ $('resultsList').innerHTML='<div class="panel">🔎 Ricerca nelle biblioteche online...</div>';
+ $('resultsDlg').showModal();
+ let results=[];
+ try{
+   // MOTORE 1: Open Library. Restituisce dati bibliografici ed edition_key.
+   let u='https://openlibrary.org/search.json?title='+encodeURIComponent(title)
+      +(author?'&author='+encodeURIComponent(author):'')
+      +'&fields=key,title,author_name,edition_key,edition_count,first_publish_year,isbn,publisher,publish_year,language,cover_i&limit=20&lang=it';
+   let r=await fetch(u); if(r.ok){
+     let d=await r.json();
+     for(let doc of (d.docs||[]).slice(0,8)){
+       // Per ogni opera chiediamo le edizioni vere.
+       let work=(doc.key||'').replace('/works/','');
+       if(!work)continue;
+       try{
+         let er=await fetch('https://openlibrary.org/works/'+work+'/editions.json?limit=50');
+         if(!er.ok)continue;
+         let ed=await er.json();
+         for(let e of (ed.entries||[])){
+           let langs=(e.languages||[]).map(x=>(x.key||'').split('/').pop());
+           // privilegia italiano ma non scarta record senza lingua
+           let isItalian=langs.includes('ita')||langs.length===0;
+           let pubs=e.publishers||doc.publisher||[];
+           let isbn=(e.isbn_13||[])[0]||(e.isbn_10||[])[0]||'';
+           let coverId=(e.covers||[])[0]||doc.cover_i||'';
+           results.push({
+             source:'Open Library', title:e.title||doc.title||title,
+             author:(doc.author_name||[]).join(', '),
+             publisher:Array.isArray(pubs)?(pubs[0]||''):pubs,
+             year:(e.publish_date||'').match(/\d{4}/)?.[0]||'',
+             isbn, language:langs.includes('ita')?'ITA':(langs.includes('eng')?'ENG':'ALTRO'),
+             pages:e.number_of_pages||e.pagination||'',
+             genre:inferGenre(e.subjects||doc.subject||[]), cover:coverId?'https://covers.openlibrary.org/b/id/'+coverId+'-M.jpg':'',
+             italian:isItalian
+           });
+         }
+       }catch(_){}
+     }
+   }
+ }catch(_){}
+ // Deduplica edizioni e privilegia quelle italiane/con ISBN/editore.
+ let norm=x=>String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+ let seen=new Set();
+ results=results.filter(x=>{
+   let k=[norm(x.title),norm(x.publisher),x.year,x.isbn].join('|');
+   if(seen.has(k))return false; seen.add(k); return true;
+ }).sort((a,b)=>(b.italian-a.italian)+(!!b.isbn-!!a.isbn)+(!!b.publisher-!!a.publisher));
+ // MOTORE 2: Google Books fallback se Open Library non restituisce abbastanza.
+ if(results.length<5){
+   try{
+     let q='intitle:'+title+(author?' inauthor:'+author:'');
+     let gr=await fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&maxResults=40&printType=books');
+     if(gr.ok){
+       let gd=await gr.json();
+       for(let it of (gd.items||[])){
+         let v=it.volumeInfo||{}, b=volumeToBook(v);
+         let k=[norm(b.title),norm(b.publisher),b.year,b.isbn].join('|');
+         if(!seen.has(k)){seen.add(k);results.push({...b,pages:v.pageCount||'',source:'Google Books',italian:(v.language||'')==='it'})}
+       }
+     }
+   }catch(_){}
+ }
+ window._editionResults=results;
+ if(!results.length){
+   $('resultsList').innerHTML='<div class="panel"><b>Nessuna edizione recuperata.</b><br>La connessione ai cataloghi online non ha restituito risultati. Prova anche con Titolo + Autore.</div>'; return;
+ }
+ $('resultsList').innerHTML=results.slice(0,60).map((b,i)=>`<div class="panel" style="display:grid;grid-template-columns:60px 1fr auto;gap:10px;align-items:center">
+ <img src="${esc(b.cover)}" onerror="this.style.visibility='hidden'" style="width:55px;height:78px;object-fit:cover;background:#ddd;border-radius:5px">
+ <div><b style="font-family:Georgia,serif">${esc(b.title)}</b><div>${esc(b.author||'Autore non indicato')}</div>
+ <div class="muted">${esc(b.publisher||'Editore non indicato')} ${esc(b.year)}${b.isbn?' · ISBN '+esc(b.isbn):''}${b.pages?' · '+esc(b.pages)+' pagine':''}</div>
+ <span class="badge">${esc(b.source)}</span>${b.italian?'<span class="badge">Italiano</span>':''}</div>
+ <button onclick="selectEdition(${i})">SELEZIONA</button></div>`).join('');
+}
+function selectEdition(i){
+ let b=window._editionResults?.[i]; if(!b)return;
+ ['isbn','title','author','publisher','year','genre','language','pages','cover'].forEach(k=>{if($(k))$(k).value=b[k]||''});
+ $('resultsDlg').close();
+}
+function selectSearchResult(i){
+ let item=window._searchItems?.[i]; if(item)applyVolume(item.volumeInfo||{});
+}
+function saveBook(){
+ let b={};fields.forEach(x=>b[x]=$(x).value.trim());
+ if(!b.title)return alert('Inserisci almeno il titolo.');
+ let duplicate=books.findIndex((x,i)=>i!==editing && b.isbn && x.isbn.replace(/\D/g,'')===b.isbn.replace(/\D/g,''));
+ if(duplicate>=0 && !confirm('ATTENZIONE: questo ISBN è già presente come '+books[duplicate].code+'. Vuoi aggiungerlo comunque?'))return;
+ if(editing===null)books.push(b);else books[editing]=b;persist();dlg.close()
+}
+function delBook(i){if(confirm('Eliminare definitivamente '+books[i].code+' — '+books[i].title+'?')){books.splice(i,1);persist()}}
+function render(){
+ let q=$('search').value.toLowerCase(), f=$('filter').value;
+ let view=books.map((b,i)=>({b,i})).filter(x=>Object.values(x.b).join(' ').toLowerCase().includes(q) && (!f || (f==='Prestato'?x.b.loanTo||x.b.status==='Prestato':x.b.status===f)));
+ $('nBooks').textContent=books.length;$('nAuthors').textContent=new Set(books.map(b=>b.author).filter(Boolean)).size;$('nGenres').textContent=new Set(books.map(b=>b.genre).filter(Boolean)).size;$('nUnread').textContent=books.filter(b=>b.status==='Da leggere').length;
+ $('books').innerHTML=view.length?view.map(({b,i})=>`<article class="panel book">
+ <img class="cover" src="${esc(b.cover)||''}" onerror="this.style.visibility='hidden'">
+ <div><div class="code">${esc(b.code)}</div><h3>${esc(b.title)}</h3><b>${esc(b.author)}</b><div class="muted">${esc(b.publisher)} ${esc(b.year)}</div>
+ <span class="badge">${esc(b.status||'')}</span>${b.genre?`<span class="badge">${esc(b.genre)}</span>`:''}
+ <p class="muted">📍 ${esc([b.room,b.shelf&&'Scaffale '+b.shelf,b.position&&'Pos. '+b.position].filter(Boolean).join(' · ')||'Posizione non indicata')}</p>
+ ${b.loanTo?`<p style="color:#a43d35"><b>Prestato a ${esc(b.loanTo)}</b> ${esc(b.loanDate)}</p>`:''}${b.rating?`<div>${esc(b.rating)}</div>`:''}</div>
+ <div class="actions"><button onclick="editBook(${i})">MODIFICA</button><button class="danger" onclick="delBook(${i})">ELIMINA</button></div></article>`).join(''):`<div class="panel empty" style="grid-column:1/-1"><h2>📖 La biblioteca è pronta</h2><p>Aggiungi il primo libro oppure scansiona il suo ISBN.</p></div>`
+}
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+$('search').addEventListener('input',render);
+async function directBackup(){
+ const name='Biblioteca_Paola_BACKUP.json';
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.13',savedAt:new Date().toISOString(),books},null,2);
+ const file=new File([data],name,{type:'application/json'});
+ // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
+ // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
+ if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+   try{await navigator.share({files:[file],title:'Backup Biblioteca di Paola'});return}
+   catch(e){if(e && e.name==='AbortError')return}
+ }
+ download(name,data,'application/json');
+}
+function exportBackup(){return directBackup()}
+function restoreBackup(file){if(!file)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result),arr=Array.isArray(d)?d:d.books;if(!Array.isArray(arr))throw 0;if(confirm('Ripristinare '+arr.length+' libri? L’archivio attuale verrà sostituito.')){books=arr;persist()}}catch(e){alert('Backup non valido.')}};r.readAsText(file)}
+function exportCSV(){let cols=fields, rows=[cols.join(';'),...books.map(b=>cols.map(c=>'"'+String(b[c]||'').replace(/"/g,'""')+'"').join(';'))];download('Biblioteca_Paola.csv','\ufeff'+rows.join('\n'),'text/csv;charset=utf-8')}
+function download(name,data,type){let a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+async function scanISBN(){
+ if(!('BarcodeDetector' in window)){let x=prompt('La scansione automatica non è supportata da questo browser. Inserisci l’ISBN:');if(x){newBook();$('isbn').value=x;lookupISBN()}return}
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});$('video').srcObject=stream;$('scanDlg').showModal();
+  let detector=new BarcodeDetector({formats:['ean_13','ean_8']});
+  let loop=async()=>{if(!stream)return;try{let codes=await detector.detect($('video'));if(codes.length){let x=codes[0].rawValue;if(/^97[89]\d{10}$/.test(x)){stopScan();newBook();$('isbn').value=x;lookupISBN();return}}}catch(e){}requestAnimationFrame(loop)};loop()
+ }catch(e){alert('Non riesco ad accedere alla fotocamera.')}
+}
+function stopScan(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$('scanDlg').close()}
+render();
+</script><script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+</script>
+</body></html>
