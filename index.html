@@ -8,7 +8,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>La Biblioteca di Paola v1.00</title>
+<title>La Biblioteca di Paola v1.14</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -22,11 +22,41 @@ button{cursor:pointer;background:var(--accent);color:white;border:0;font-weight:
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:14px}.book{display:grid;grid-template-columns:78px 1fr;gap:12px}.cover{width:78px;height:112px;object-fit:cover;background:#ddd;border-radius:7px}.book h3{margin:0 0 5px;font-family:Georgia,serif}.code{font-weight:800;color:var(--accent)}.muted{color:#746b62;font-size:13px}.badge{display:inline-block;background:var(--soft);padding:4px 7px;border-radius:999px;font-size:12px;margin:3px 3px 0 0}.actions{grid-column:1/-1;display:flex;gap:7px;flex-wrap:wrap}.actions button{padding:7px 9px;font-size:12px}
 dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 20px 60px #0005}dialog::backdrop{background:#0007}.modal{padding:22px;background:var(--paper)}.modal h2{margin-top:0;font-family:Georgia,serif}.form{display:grid;grid-template-columns:1fr 1fr;gap:11px}.form .full{grid-column:1/-1}.form label{font-size:12px;font-weight:800;min-height:0}.form label>*{display:block;width:100%;margin-top:4px}.form datalist{display:none!important;width:0!important;height:0!important;margin:0!important;padding:0!important;position:absolute!important}.preview{display:flex;gap:14px;align-items:flex-start}.preview img{width:100px;min-height:140px;object-fit:cover;background:#ddd}.right{display:flex;justify-content:flex-end;gap:8px;margin-top:15px}
 #reader{display:none}.empty{text-align:center;padding:55px 20px;color:#776d62}.notice{background:#fff4cc;border:1px solid #ead37c;padding:10px;border-radius:10px;margin:10px 0}
-@media(max-width:720px){.stats{grid-template-columns:1fr 1fr}.toolbar{grid-template-columns:1fr 1fr}.toolbar input{grid-column:1/-1}.form{grid-template-columns:1fr}.form .full{grid-column:auto}}
+@media(max-width:720px){
+ body{font-size:14px;overflow-x:hidden}
+ header{padding:11px 12px;gap:6px}
+ header h1{font-size:21px}
+ header small{font-size:11px}
+ main{width:100%;max-width:100%;padding:10px}
+ .stats{grid-template-columns:1fr 1fr;gap:7px}
+ .stat,.panel{padding:10px;border-radius:12px}
+ .stat b{font-size:22px}
+ .toolbar{grid-template-columns:1fr 1fr;gap:6px;margin:9px 0}
+ .toolbar input{grid-column:1/-1;min-width:0}
+ input,select,textarea,button{min-width:0;width:100%;padding:9px 7px;font-size:13px}
+ .grid{grid-template-columns:1fr;gap:9px}
+ .book{grid-template-columns:62px minmax(0,1fr);gap:9px}
+ .cover{width:62px;height:90px}
+ .book h3{font-size:16px;overflow-wrap:anywhere}
+ .actions{gap:5px}.actions button{width:auto;flex:1 1 auto}
+ dialog{width:96vw;max-width:96vw;max-height:92vh;overflow:auto}
+ .modal{padding:13px}
+ .form{grid-template-columns:1fr;gap:8px}
+ .form .full{grid-column:auto}
+ .preview{gap:9px}.preview img{width:72px;min-height:100px}
+ .right{gap:6px;flex-wrap:wrap}.right button{width:auto;flex:1}
+}
+@media(max-width:390px){
+ main{padding:7px}
+ .stat{padding:8px}
+ .stat b{font-size:20px}
+ .toolbar{grid-template-columns:1fr}
+ .toolbar input{grid-column:auto}
+}
 </style>
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.13 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.14 — 21/09/2026</b></header>
 <main>
 <section class="stats">
 <div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
@@ -323,7 +353,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.13',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.14',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
