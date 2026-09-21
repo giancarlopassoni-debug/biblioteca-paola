@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>La Biblioteca di Paola v1.19</title>
+<title>La Biblioteca di Paola v1.22</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -57,7 +57,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 </style>
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.19 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.22 — 21/09/2026</b></header>
 <main>
 <section class="stats">
 <div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
@@ -128,6 +128,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 <option>FUMETTI / GRAPHIC NOVEL</option>
 <option>SAGGI</option>
 <option>DIZIONARI / ENCICLOPEDIE</option>
+<option>EBOOK</option>
 <option>ALTRO</option>
 </select>
 </label><label>Lingua
@@ -152,7 +153,14 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 </label><label>Scaffale<input id="shelf" placeholder="es. 4"></label>
 <label>Posizione<input id="position" placeholder="es. 12"></label><label>Stato<select id="status"><option>Da leggere</option><option>Letto</option><option>In lettura</option><option>Prestato</option><option>Ebook</option></select></label>
 <label>Valutazione<select id="rating"><option value="">—</option><option>★</option><option>★★</option><option>★★★</option><option>★★★★</option><option>★★★★★</option></select></label><label>Anno lettura<input id="readYear"></label>
-<label class="full">URL copertina<input id="cover"></label>
+<label class="full">Copertina
+<div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center">
+<input id="cover" placeholder="URL web oppure foto personale" oninput="updateCoverPreview()">
+<button type="button" onclick="$('coverPhoto').click()">📷 FOTO COPERTINA</button>
+</div>
+<input id="coverPhoto" type="file" accept="image/*" capture="environment" hidden onchange="setCoverPhoto(this)">
+<div style="margin-top:7px"><img id="coverPreview" alt="Anteprima copertina" style="display:none;width:100px;height:145px;object-fit:cover;border-radius:8px;border:1px solid #cfc1ae;background:#ddd"></div>
+</label>
 <label class="full">Prestato a<input id="loanTo" placeholder="Nome della persona"></label>
 <label class="full">Data prestito<input id="loanDate" type="date"></label>
 <label class="full">Note<textarea id="notes" rows="3"></textarea></label>
@@ -180,8 +188,8 @@ function persist(){localStorage.setItem(KEY,JSON.stringify(books));render()}
 function openDialog(id){const el=$(id);if(!el)return;try{if(typeof el.showModal==='function')el.showModal();else el.setAttribute('open','')}catch(e){el.setAttribute('open','')}}
 function closeDialog(id){const el=$(id);if(!el)return;try{if(typeof el.close==='function')el.close();else el.removeAttribute('open')}catch(e){el.removeAttribute('open')}}
 function nextCode(){let n=Math.max(0,...books.map(b=>+(b.code||'').replace(/\D/g,'')||0))+1;return 'PAO-'+String(n).padStart(4,'0')}
-function newBook(){editing=null;fields.forEach(x=>$(x).value='');$('code').value=nextCode();$('status').value='Da leggere';$('dlgTitle').textContent='Aggiungi un libro';openDialog('dlg')}
-function editBook(i){editing=i;let b=books[i];fields.forEach(x=>$(x).value=b[x]||'');$('dlgTitle').textContent='Modifica '+b.code;openDialog('dlg')}
+function newBook(){editing=null;fields.forEach(x=>$(x).value='');$('code').value=nextCode();$('status').value='Da leggere';$('dlgTitle').textContent='Aggiungi un libro';updateCoverPreview();openDialog('dlg')}
+function editBook(i){editing=i;let b=books[i];fields.forEach(x=>$(x).value=b[x]||'');$('dlgTitle').textContent='Modifica '+b.code;updateCoverPreview();openDialog('dlg')}
 async function lookupISBN(){
  let isbn=String($('isbn').value||'').toUpperCase().replace(/[^0-9X]/g,'');
  if(!(isbn.length===10||isbn.length===13))return alert('ISBN non valido. Inserisci le 10 o 13 cifre stampate sotto il codice a barre.');
@@ -198,7 +206,7 @@ async function lookupISBN(){
        $('year').value=String(v.publish_date||'').match(/\d{4}/)?.[0]||'';
        $('pages').value=v.number_of_pages||'';
        $('cover').value=v.cover?.medium||v.cover?.large||v.cover?.small||'';
-       return;
+       updateCoverPreview(); return;
      }
    }
  }catch(e){}
@@ -363,6 +371,37 @@ function selectEdition(i){
 function selectSearchResult(i){
  let item=window._searchItems?.[i]; if(item)applyVolume(item.volumeInfo||{});
 }
+function updateCoverPreview(){
+ const img=$('coverPreview'), src=$('cover')?.value||'';
+ if(!img)return;
+ if(src){img.src=src;img.style.display='block'}else{img.removeAttribute('src');img.style.display='none'}
+}
+async function setCoverPhoto(input){
+ const file=input.files&&input.files[0]; if(!file)return;
+ try{
+   const data=await resizeCoverPhoto(file,700,1000,0.78);
+   $('cover').value=data;
+   updateCoverPreview();
+ }catch(e){alert('Non riesco a usare questa foto. Riprova.')}
+ finally{input.value=''}
+}
+function resizeCoverPhoto(file,maxW,maxH,quality){
+ return new Promise((resolve,reject)=>{
+   const url=URL.createObjectURL(file), img=new Image();
+   img.onload=()=>{
+     try{
+       let w=img.naturalWidth,h=img.naturalHeight,scale=Math.min(1,maxW/w,maxH/h);
+       w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));
+       const c=document.createElement('canvas');c.width=w;c.height=h;
+       c.getContext('2d').drawImage(img,0,0,w,h);
+       const out=c.toDataURL('image/jpeg',quality);
+       URL.revokeObjectURL(url);resolve(out);
+     }catch(e){URL.revokeObjectURL(url);reject(e)}
+   };
+   img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('image'))};
+   img.src=url;
+ })
+}
 function saveBook(){
  let b={};fields.forEach(x=>b[x]=$(x).value.trim());
  if(!b.title)return alert('Inserisci almeno il titolo.');
@@ -387,7 +426,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.19',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.22',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
