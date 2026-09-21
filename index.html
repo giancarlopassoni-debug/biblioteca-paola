@@ -7,8 +7,9 @@
 <meta name="apple-mobile-web-app-title" content="Biblioteca Paola">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://unpkg.com/@zxing/browser@0.2.1/umd/zxing-browser.min.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>La Biblioteca di Paola v1.17</title>
+<title>La Biblioteca di Paola v1.18</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -56,7 +57,7 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 </style>
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.17 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.18 — 21/09/2026</b></header>
 <main>
 <section class="stats">
 <div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
@@ -64,7 +65,8 @@ dialog{width:min(760px,94vw);border:0;border-radius:18px;padding:0;box-shadow:0 
 <div class="toolbar">
 <input id="search" placeholder="🔎 Titolo, autore, ISBN, PAO-0001, editore, posizione...">
 <button onclick="newBook()">＋ AGGIUNGI</button><button class="alt" onclick="scanISBN()">📷 FOTO ISBN</button>
-<input id="isbnPhoto" type="file" accept="image/*" capture="environment" hidden onchange="readISBNPhoto(this)"><button class="light" onclick="directBackup()">☁ BACKUP DIRETTO</button>
+<input id="isbnPhoto" type="file" accept="image/*" capture="environment" hidden onchange="readISBNPhoto(this)">
+<img id="isbnDecodeImage" alt="" style="position:fixed;left:-9999px;top:-9999px;max-width:none"><button class="light" onclick="directBackup()">☁ BACKUP DIRETTO</button>
 </div>
 <div class="toolbar" style="grid-template-columns:auto auto auto 1fr">
 <button class="light" onclick="document.getElementById('restore').click()">RIPRISTINA</button><button class="light" onclick="exportCSV()">ESPORTA CSV</button>
@@ -357,7 +359,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.17',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.18',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
@@ -392,22 +394,41 @@ async function scanISBN(){
 }
 async function readISBNPhoto(input){
  const file=input.files&&input.files[0]; if(!file)return;
- // Se il browser sa leggere barcode da immagini, prova automaticamente.
- if('BarcodeDetector' in window){
-   try{
-     const bmp=await createImageBitmap(file);
-     const detector=new BarcodeDetector({formats:['ean_13','ean_8']});
-     const codes=await detector.detect(bmp);
-     const hit=codes.find(c=>/^97[89]\d{10}$/.test(c.rawValue||''));
-     if(hit){newBook();$('isbn').value=hit.rawValue;lookupISBN();return}
-   }catch(e){}
- }
- // Safari iPhone normalmente non espone BarcodeDetector: dopo la foto chiede solo le 13 cifre.
- const x=prompt('Foto acquisita. Inserisci le 13 cifre ISBN stampate sotto il codice a barre:');
- if(x){
-   const isbn=x.replace(/\D/g,'');
-   if(!/^97[89]\d{10}$/.test(isbn)) return alert('ISBN non valido: devono essere 13 cifre e iniziare con 978 o 979.');
-   newBook();$('isbn').value=isbn;lookupISBN();
+ const img=$('isbnDecodeImage');
+ const url=URL.createObjectURL(file);
+ try{
+   img.src=url;
+   await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject});
+   let raw='';
+   // Prima scelta: ZXing, vero lettore EAN/ISBN compatibile con immagini.
+   if(window.ZXingBrowser && ZXingBrowser.BrowserMultiFormatReader){
+     try{
+       const reader=new ZXingBrowser.BrowserMultiFormatReader();
+       const result=await reader.decodeFromImageElement(img);
+       raw=result && (result.getText ? result.getText() : result.text) || '';
+     }catch(e){}
+   }
+   // Fallback: API nativa, se disponibile.
+   if(!raw && 'BarcodeDetector' in window){
+     try{
+       const detector=new BarcodeDetector({formats:['ean_13','ean_8']});
+       const codes=await detector.detect(img);
+       raw=codes?.[0]?.rawValue||'';
+     }catch(e){}
+   }
+   const isbn=String(raw).replace(/\D/g,'');
+   if(/^97[89]\d{10}$/.test(isbn)){
+     newBook();
+     $('isbn').value=isbn;
+     await lookupISBN();
+     return;
+   }
+   alert('Non sono riuscito a leggere il codice ISBN dalla foto. Riprova avvicinandoti al codice, con buona luce e tenendo il barcode diritto.');
+ }catch(e){
+   alert('Non sono riuscito ad aprire la foto. Riprova.');
+ }finally{
+   URL.revokeObjectURL(url);
+   input.value='';
  }
 }
 function stopScan(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}if($('scanDlg').open)closeDialog('scanDlg')}
