@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>La Biblioteca di Paola v1.26</title>
+<title>La Biblioteca di Paola v1.27</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -72,10 +72,10 @@ img,video,canvas{max-width:100%}
 
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.26 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.27 — 21/09/2026</b></header>
 <main>
 <section class="stats">
-<div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat"><b id="nGenres">0</b>GENERI</div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
+<div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat" role="button" tabindex="0" onclick="openGenreSummary()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGenreSummary()}" style="cursor:pointer"><b id="nGenres">0</b>GENERI<button type="button" onclick="event.stopPropagation();openGenreSummary()" style="display:block;margin:6px auto 0;padding:6px 8px;font-size:12px;width:auto">VEDI ELENCO</button></div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
 
 </section>
 <div class="toolbar">
@@ -471,11 +471,26 @@ function genreCounts(status='',yr=''){
  return map;
 }
 function openGenreSummary(){
- const counts=genreCounts();
- const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'it'));
- $('genreSummaryList').innerHTML=rows.length
-   ? rows.map(([g,n])=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 3px;border-bottom:1px solid #ddd"><b>'+escapeHtml(g)+'</b><span>'+n+'</span></div>').join('')
-   : '<p>Nessun libro registrato.</p>';
+ const box=$('genreSummaryList');
+ if(!box){alert('Finestra generi non disponibile.');return}
+ const map={};
+ books.forEach(b=>{
+   const g=String(b.genre||'').trim()||'SENZA GENERE';
+   map[g]=(map[g]||0)+1;
+ });
+ const rows=Object.entries(map).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'it'));
+ box.innerHTML='';
+ if(!rows.length){
+   const p=document.createElement('p');p.textContent='Nessun libro registrato.';box.appendChild(p);
+ }else{
+   rows.forEach(([g,n])=>{
+     const row=document.createElement('div');
+     row.style.cssText='display:flex;justify-content:space-between;gap:12px;padding:9px 3px;border-bottom:1px solid #ddd';
+     const b=document.createElement('b');b.textContent=g;
+     const num=document.createElement('span');num.textContent=n;
+     row.append(b,num);box.appendChild(row);
+   });
+ }
  openDialog('genreSummaryDlg');
 }
 function openStatsQuery(){
@@ -522,7 +537,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.26',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.27',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
