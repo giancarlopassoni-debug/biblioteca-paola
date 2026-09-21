@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>La Biblioteca di Paola v1.27</title>
+<title>La Biblioteca di Paola v1.29</title>
 <style>
 :root{--bg:#f4efe5;--paper:#fffdf8;--ink:#2e2923;--accent:#765b3d;--soft:#e9dfcf;--red:#a43d35;--green:#4d7657}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Arial;background:var(--bg);color:var(--ink)}
@@ -72,10 +72,10 @@ img,video,canvas{max-width:100%}
 
 </head>
 <body>
-<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.27 — 21/09/2026</b></header>
+<header><div><h1>📚 La Biblioteca di Paola</h1><small>Archivio personale dei libri</small></div><b>Versione 1.29 — 21/09/2026</b></header>
 <main>
 <section class="stats">
-<div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat"><b id="nAuthors">0</b>AUTORI</div><div class="stat" role="button" tabindex="0" onclick="openGenreSummary()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGenreSummary()}" style="cursor:pointer"><b id="nGenres">0</b>GENERI<button type="button" onclick="event.stopPropagation();openGenreSummary()" style="display:block;margin:6px auto 0;padding:6px 8px;font-size:12px;width:auto">VEDI ELENCO</button></div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
+<div class="stat"><b id="nBooks">0</b>LIBRI</div><div class="stat" role="button" tabindex="0" onclick="openAuthorSummary()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openAuthorSummary()}" style="cursor:pointer"><b id="nAuthors">0</b>AUTORI<button type="button" onclick="event.stopPropagation();openAuthorSummary()" style="display:block;margin:6px auto 0;padding:6px 8px;font-size:12px;width:auto">VEDI ELENCO</button></div><div class="stat" role="button" tabindex="0" onclick="openGenreSummary()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openGenreSummary()}" style="cursor:pointer"><b id="nGenres">0</b>GENERI<button type="button" onclick="event.stopPropagation();openGenreSummary()" style="display:block;margin:6px auto 0;padding:6px 8px;font-size:12px;width:auto">VEDI ELENCO</button></div><div class="stat"><b id="nUnread">0</b>DA LEGGERE</div>
 
 </section>
 <div class="toolbar">
@@ -94,6 +94,13 @@ img,video,canvas{max-width:100%}
 </main>
 
 
+<dialog id="authorSummaryDlg">
+ <div class="modal">
+  <div class="right"><button type="button" onclick="closeDialog('authorSummaryDlg')">✕ CHIUDI</button></div>
+  <h2>✍️ Libri per autore</h2>
+  <div id="authorSummaryList"></div>
+ </div>
+</dialog>
 <dialog id="genreSummaryDlg">
  <div class="modal">
   <div class="right"><button type="button" onclick="closeDialog('genreSummaryDlg')">✕ CHIUDI</button></div>
@@ -239,44 +246,94 @@ function closeDialog(id){const el=$(id);if(!el)return;try{if(typeof el.close==='
 function nextCode(){let n=Math.max(0,...books.map(b=>+(b.code||'').replace(/\D/g,'')||0))+1;return 'PAO-'+String(n).padStart(4,'0')}
 function newBook(){editing=null;fields.forEach(x=>$(x).value='');$('code').value=nextCode();$('status').value='Da leggere';$('dlgTitle').textContent='Aggiungi un libro';updateCoverPreview();openDialog('dlg')}
 function editBook(i){editing=i;let b=books[i];fields.forEach(x=>$(x).value=b[x]||'');$('dlgTitle').textContent='Modifica '+b.code;updateCoverPreview();openDialog('dlg')}
+function isbn13to10(isbn){
+ const x=String(isbn||'').replace(/\D/g,'');
+ if(x.length!==13 || !x.startsWith('978'))return '';
+ const core=x.slice(3,12); let sum=0;
+ for(let i=0;i<9;i++)sum+=(10-i)*Number(core[i]);
+ const c=(11-(sum%11))%11;
+ return core+(c===10?'X':String(c));
+}
+function fillFromOpenLibrary(v){
+ $('title').value=v.title||'';
+ $('author').value=(v.authors||[]).map(a=>a.name).join(', ');
+ $('publisher').value=(v.publishers||[]).map(a=>a.name).join(', ');
+ $('year').value=String(v.publish_date||'').match(/\d{4}/)?.[0]||'';
+ $('pages').value=v.number_of_pages||'';
+ $('cover').value=v.cover?.medium||v.cover?.large||v.cover?.small||'';
+ updateCoverPreview(); return true;
+}
+function fillFromGoogle(v){
+ v=v||{};
+ $('title').value=v.title||'';
+ $('author').value=(v.authors||[]).join(', ');
+ $('publisher').value=v.publisher||'';
+ $('year').value=(v.publishedDate||'').slice(0,4);
+ $('genre').value=inferGenre(v.categories||[]);
+ $('language').value=(v.language||'').toLowerCase()==='it'?'ITA':((v.language||'').toLowerCase()==='en'?'ENG':'ALTRO');
+ $('pages').value=v.pageCount||'';
+ $('cover').value=(v.imageLinks?.thumbnail||v.imageLinks?.smallThumbnail||'').replace('http:','https:');
+ updateCoverPreview(); return true;
+}
 async function lookupISBN(){
  let isbn=String($('isbn').value||'').toUpperCase().replace(/[^0-9X]/g,'');
  if(!(isbn.length===10||isbn.length===13))return alert('ISBN non valido. Inserisci le 10 o 13 cifre stampate sotto il codice a barre.');
  $('isbn').value=isbn;
- try{
-   // Open Library: prima fonte
-   let r=await fetch('https://openlibrary.org/api/books?bibkeys=ISBN:'+encodeURIComponent(isbn)+'&jscmd=data&format=json');
+ const alt=isbn.length===13?isbn13to10(isbn):'';
+ const codes=[isbn,alt].filter(Boolean);
+
+ // 1) Open Library Books API: ISBN-13 e, se possibile, ISBN-10.
+ for(const code of codes){
+  try{
+   const r=await fetch('https://openlibrary.org/api/books?bibkeys=ISBN:'+encodeURIComponent(code)+'&jscmd=data&format=json');
+   if(r.ok){const d=await r.json(),v=d['ISBN:'+code];if(v)return fillFromOpenLibrary(v)}
+  }catch(e){}
+ }
+
+ // 2) Open Library Search: seconda interrogazione del catalogo per ISBN.
+ for(const code of codes){
+  try{
+   const r=await fetch('https://openlibrary.org/search.json?isbn='+encodeURIComponent(code)+'&limit=5');
    if(r.ok){
-     let d=await r.json(), v=d['ISBN:'+isbn];
-     if(v){
-       $('title').value=v.title||'';
-       $('author').value=(v.authors||[]).map(a=>a.name).join(', ');
-       $('publisher').value=(v.publishers||[]).map(a=>a.name).join(', ');
-       $('year').value=String(v.publish_date||'').match(/\d{4}/)?.[0]||'';
-       $('pages').value=v.number_of_pages||'';
-       $('cover').value=v.cover?.medium||v.cover?.large||v.cover?.small||'';
-       updateCoverPreview(); return;
-     }
+    const d=await r.json(),x=d.docs?.[0];
+    if(x){
+     $('title').value=x.title||'';
+     $('author').value=(x.author_name||[]).join(', ');
+     $('publisher').value=(x.publisher||[])[0]||'';
+     $('year').value=x.first_publish_year||'';
+     $('pages').value=x.number_of_pages_median||'';
+     if(x.cover_i)$('cover').value='https://covers.openlibrary.org/b/id/'+x.cover_i+'-L.jpg';
+     updateCoverPreview(); return;
+    }
    }
- }catch(e){}
- try{
-   // Google Books fallback
-   let r=await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:'+encodeURIComponent(isbn)+'&maxResults=10');
-   let d=await r.json();
-   if(d.items?.length){
-     let v=d.items[0].volumeInfo||{};
-     $('title').value=v.title||'';
-     $('author').value=(v.authors||[]).join(', ');
-     $('publisher').value=v.publisher||'';
-     $('year').value=(v.publishedDate||'').slice(0,4);
-     $('genre').value=inferGenre(v.categories||[]);
-     $('language').value=(v.language||'').toLowerCase()==='it'?'ITA':((v.language||'').toLowerCase()==='en'?'ENG':'ALTRO');
-     $('pages').value=v.pageCount||'';
-     $('cover').value=(v.imageLinks?.thumbnail||v.imageLinks?.smallThumbnail||'').replace('http:','https:');
-     return;
+  }catch(e){}
+ }
+
+ // 3) Google Books: ricerca ISBN esatta, ISBN-10 e infine numero libero.
+ const queries=[];
+ codes.forEach(c=>queries.push('isbn:'+c));
+ codes.forEach(c=>queries.push(c));
+ for(const q of queries){
+  try{
+   const r=await fetch('https://www.googleapis.com/books/v1/volumes?q='+encodeURIComponent(q)+'&maxResults=20&printType=books');
+   if(r.ok){
+    const d=await r.json();
+    if(d.items?.length){
+     // Preferisce un risultato che riporti davvero uno degli ISBN cercati.
+     let item=d.items.find(it=>(it.volumeInfo?.industryIdentifiers||[]).some(z=>codes.includes(String(z.identifier||'').replace(/[^0-9X]/g,''))))||d.items[0];
+     return fillFromGoogle(item.volumeInfo);
+    }
    }
- }catch(e){}
- alert('ISBN non trovato nei cataloghi online. Controlla il numero oppure compila la scheda manualmente.');
+  }catch(e){}
+ }
+
+ // Nessun blocco: conserva l'ISBN e permette subito titolo/manuale.
+ if(confirm('ISBN non trovato automaticamente. Vuoi provare subito la ricerca per TITOLO?')){
+   setTimeout(()=>{$('title')?.focus()},50);
+   alert('Scrivi il titolo nel campo TITOLO e premi CERCA TITOLO. L’ISBN inserito resta memorizzato nella scheda.');
+ }else{
+   alert('Puoi continuare a compilare la scheda manualmente. L’ISBN inserito resta memorizzato.');
+ }
 }
 
 function volumeToBook(v){
@@ -470,6 +527,30 @@ function genreCounts(status='',yr=''){
  });
  return map;
 }
+function openAuthorSummary(){
+ const box=$('authorSummaryList');
+ if(!box){alert('Finestra autori non disponibile.');return}
+ const map={};
+ books.forEach(b=>{
+   const raw=String(b.author||'').trim()||'SENZA AUTORE';
+   // Manteniamo la dicitura autore della scheda; un libro con più autori resta una voce unica.
+   map[raw]=(map[raw]||0)+1;
+ });
+ const rows=Object.entries(map).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'it'));
+ box.innerHTML='';
+ if(!rows.length){
+   const p=document.createElement('p');p.textContent='Nessun libro registrato.';box.appendChild(p);
+ }else{
+   rows.forEach(([a,n])=>{
+     const row=document.createElement('div');
+     row.style.cssText='display:flex;justify-content:space-between;gap:12px;padding:9px 3px;border-bottom:1px solid #ddd';
+     const b=document.createElement('b');b.textContent=a;
+     const num=document.createElement('span');num.textContent=n;
+     row.append(b,num);box.appendChild(row);
+   });
+ }
+ openDialog('authorSummaryDlg');
+}
 function openGenreSummary(){
  const box=$('genreSummaryList');
  if(!box){alert('Finestra generi non disponibile.');return}
@@ -537,7 +618,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 $('search').addEventListener('input',render);
 async function directBackup(){
  const name='Biblioteca_Paola_BACKUP.json';
- const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.27',savedAt:new Date().toISOString(),books},null,2);
+ const data=JSON.stringify({app:'Biblioteca di Paola',version:'1.29',savedAt:new Date().toISOString(),books},null,2);
  const file=new File([data],name,{type:'application/json'});
  // Su iPhone/iPad apre il pannello Condividi: scegli "Salva su File" e quindi iCloud Drive.
  // iOS non consente a una PWA di sovrascrivere silenziosamente un file arbitrario in iCloud Drive.
